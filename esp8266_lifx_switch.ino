@@ -274,17 +274,17 @@ void onChange() {
   if (reading) {
     uint8_t leftLight []= {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
     uint8_t rightLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd3, 0xf9};
-    //uint16_t power = GetPower(leftLight);
-    //Serial.println("GetPower: " + String(power));
-    if (light_state) {
-      SetPower(rightLight, 0);
-      SetPower(leftLight, 0);
-      light_state = 0;
-    } else {
-      SetPower(rightLight, 65535);
-      SetPower(leftLight, 65535);
-      light_state = 1;
-    }
+    uint16_t power = GetPower(leftLight);
+    Serial.println("GetPower: " + String(power));
+//    if (light_state) {
+//      SetPower(rightLight, 0);
+//      SetPower(leftLight, 0);
+//      light_state = 0;
+//    } else {
+//      SetPower(rightLight, 65535);
+//      SetPower(leftLight, 65535);
+//      light_state = 1;
+//    }
   }
   interrupts();
 }
