@@ -210,7 +210,7 @@ void setup() {
 
   /* Setup Interupts */
   pinMode(BUTTON, INPUT_PULLUP);
-  attachInterrupt(BUTTON, onChange, CHANGE);
+  attachInterrupt(BUTTON, onButtonChange, CHANGE);
 }
 
 void lxToggle() {
@@ -228,7 +228,7 @@ void lxToggle() {
 }
 
 // Gets called by the interrupt.
-void onChange() {
+void onButtonChange() {
   // Get the pin reading.
   boolean reading = digitalRead(BUTTON);
 
@@ -250,9 +250,8 @@ void onChange() {
   state = reading;
 
   // Work with the value now.
-  Serial.println("button: " + String(reading));
+  //Serial.println("button: " + String(reading));
 
-  //detachInterrupt(BUTTON);
   if (!reading) {
     toggle_now = 1;
   }
