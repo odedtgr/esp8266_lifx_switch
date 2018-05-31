@@ -1,14 +1,13 @@
 #include <Arduino.h>
-
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
 const char *ssid = "TAGAR";
 const char *password = "mayahers";
 
-const int BUTTON = 0;
+const int BUTTON = 13;
 
-boolean light_state = 0;
+boolean toggle_now = 0;
 
 const uint8_t SIZE_OF_MAC = 6;
 
@@ -84,114 +83,88 @@ typedef struct {
 } lx_set_color_t;
 #pragma pack(pop)
 
-
 // Payload types
 #define LIFX_DEVICE_GETPOWER 20
 #define LIFX_DEVICE_SETPOWER 21
 #define LIFX_DEVICE_STATEPOWER 22
 #define LIFX_DEVICE_SETCOLOR 102
 
+// Timing data
+unsigned long sendInterval = 2000; // 30 seconds
 unsigned long timeoutInterval = 500;
+
+unsigned long lastSend = 0;
+
 // Packet buffer size
 #define LIFX_INCOMING_PACKET_BUFFER_LEN 300
 
+void SetPower(uint8_t *dest, uint16_t level) {
+  lx_protocol_header_t header;
+  lx_set_power_t payload;
 
-void lxMakeFrame(lx_protocol_header_t *lxHead, uint8_t extraSize, uint8_t tagged, uint8_t *target, uint16_t message) {
-  /* frame */
-  lxHead->size = (uint8_t)36 + extraSize;
-  lxHead->protocol = (uint16_t)1024;
-  lxHead->addressable = (uint8_t)1;
-  lxHead->tagged = tagged;
-  lxHead->origin = (uint8_t)0;
-  lxHead->source = (uint32_t)3549;
+  // Initialise both structures
+  memset(&header, 0, sizeof(header));
+  memset(&payload, 0, sizeof(payload));
 
-  /* frame address */
-  uint8_t i = 0;
-  for (i = 0; i < 8; i++) {
-    lxHead->target[i] = (uint8_t)target[i];
-  }
-  lxHead->res_required = (uint8_t)0;
-  lxHead->ack_required = (uint8_t)0;
-  lxHead->sequence = (uint8_t)0;
+  // Set the target the nice way
+  memcpy(header.target, dest, sizeof(uint8_t) * SIZE_OF_MAC);
 
-  /* protocol header */
-  lxHead->type = message;
-}
+  // Setup the header
+  header.size = sizeof(lx_protocol_header_t)+sizeof(lx_set_power_t); // Size of header + payload
+  header.tagged = 0;
+  header.addressable = 1;
+  header.protocol = 1024;
+  header.source = 123;
+  header.ack_required = 0;
+  header.res_required = 0;
+  header.sequence = 100;
+  header.type = LIFX_DEVICE_SETPOWER;
 
-void SetColor(uint8_t *target_addr) {
+  // Setup the payload
+  payload.level = level;
+  payload.duration = 1000;
 
-  /* Build payload */
-
-  lx_protocol_header_t *lxHead;
-  lxHead = (lx_protocol_header_t *)calloc(1, sizeof(lx_protocol_header_t));
-  lxMakeFrame(lxHead, sizeof(lx_set_color_t), 0, target_addr, LIFX_DEVICE_SETCOLOR);
-
-  lx_set_color_t *lxSetColor;
-  lxSetColor = (lx_set_color_t *)calloc(1, sizeof(lx_set_color_t));
-  lxSetColor->duration = 2000;
-  lxSetColor->hue = 0;
-  lxSetColor->saturation = 0;
-  lxSetColor->brightness = 65535;
-  lxSetColor->kelvin = 2500;
-
+  // Send a packet on startup
   UDP.beginPacket(bcastAddr, lxPort);
-  byte *b = (byte *)lxHead;
-  UDP.write(b, sizeof(lx_protocol_header_t));
-  b = (byte *)lxSetColor;
-  UDP.write(b, sizeof(lx_set_color_t));
+  UDP.write((char *) &header, sizeof(lx_protocol_header_t));
+  UDP.write((char *) &payload, sizeof(lx_set_power_t));
   UDP.endPacket();
-
-  free(lxSetColor);
-  free(lxHead);
 }
 
-void SetPower(uint8_t *target_addr, uint16_t level) {
-
-  /* Build payload */
-
-  lx_protocol_header_t *lxHead;
-  lxHead = (lx_protocol_header_t *)calloc(1, sizeof(lx_protocol_header_t));
-  lxMakeFrame(lxHead, sizeof(lx_set_power_t), 0, target_addr, LIFX_DEVICE_SETPOWER);
-
-  lx_set_power_t *lxSetPower;
-  lxSetPower = (lx_set_power_t *)calloc(1, sizeof(lx_set_power_t));
-  lxSetPower->duration = 2000;
-  lxSetPower->level = level;
-
-  UDP.beginPacket(bcastAddr, lxPort);
-  byte *b = (byte *)lxHead;
-  UDP.write(b, sizeof(lx_protocol_header_t));
-  b = (byte *)lxSetPower;
-  UDP.write(b, sizeof(lx_set_power_t));
-  UDP.endPacket();
-
-  free(lxSetPower);
-  free(lxHead);
-}
-
-uint16_t GetPower(uint8_t *target_addr) {
+uint16_t GetPower(uint8_t *dest) {
   uint16_t power = 1;
-  
-  /* Build payload */
 
-  lx_protocol_header_t *lxHead;
-  lxHead = (lx_protocol_header_t *)calloc(1, sizeof(lx_protocol_header_t));
-  lxMakeFrame(lxHead, 0, 0, target_addr, LIFX_DEVICE_GETPOWER);
+  lx_protocol_header_t header;
 
+  // Initialise both structures
+  memset(&header, 0, sizeof(header));
 
+  // Set the target the nice way
+  memcpy(header.target, dest, sizeof(uint8_t) * SIZE_OF_MAC);
+
+  // Setup the header
+  header.size = sizeof(lx_protocol_header_t); // Size of header + payload
+  header.tagged = 0;
+  header.addressable = 1;
+  header.protocol = 1024;
+  header.source = 123;
+  header.ack_required = 0;
+  header.res_required = 0;
+  header.sequence = 100;
+  header.type = LIFX_DEVICE_GETPOWER;
+
+  // Send a packet on startup
   UDP.beginPacket(bcastAddr, lxPort);
-  byte *b = (byte *)lxHead;
-  UDP.write(b, sizeof(lx_protocol_header_t));
+  UDP.write((char *) &header, sizeof(lx_protocol_header_t));
   UDP.endPacket();
-  free(lxHead);
-  
+
   unsigned long started = millis();
   while (millis() - started < timeoutInterval) {
     int packetLen = UDP.parsePacket();
     byte packetBuffer[LIFX_INCOMING_PACKET_BUFFER_LEN];
     if (packetLen && packetLen < LIFX_INCOMING_PACKET_BUFFER_LEN) {
       UDP.read(packetBuffer, sizeof(packetBuffer));
-      
+
       if (((lx_protocol_header_t *)packetBuffer)->type == LIFX_DEVICE_STATEPOWER) {
         power = ((lx_state_power_t *)(packetBuffer + sizeof(lx_protocol_header_t)))->level;
         return power;
@@ -203,8 +176,6 @@ uint16_t GetPower(uint8_t *target_addr) {
   }
   return power;
 }
-
-
 
 void startWifi() {
   Serial.println();
@@ -242,24 +213,35 @@ void setup() {
   attachInterrupt(BUTTON, onChange, CHANGE);
 }
 
+void lxToggle() {
+  uint8_t leftLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
+  uint8_t rightLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd3, 0xf9};
+  uint16_t power = GetPower(leftLight);
+  //Serial.println("GetPower: " + String(power));
+  if (power) {
+    SetPower(rightLight, 0);
+    SetPower(leftLight, 0);
+  } else {
+    SetPower(rightLight, 65535);
+    SetPower(leftLight, 65535);
+  }
+}
+
 // Gets called by the interrupt.
 void onChange() {
-  noInterrupts();
   // Get the pin reading.
   boolean reading = digitalRead(BUTTON);
 
   // Ignore dupe readings.
   if (reading == state) {
-    interrupts();
     return;
   }
 
   // Check to see if the change is within a debounce delay threshold.
   if ((millis() - lastDebounceTime) <= debounceDelay) {
-    interrupts();
     return;
   }
- 
+
   // This update to the last debounce check is necessary regardless of debounce state.
   //Serial.println("time: " + String(millis() - lastDebounceTime));
   lastDebounceTime = millis();
@@ -271,23 +253,14 @@ void onChange() {
   Serial.println("button: " + String(reading));
 
   //detachInterrupt(BUTTON);
-  if (reading) {
-    uint8_t leftLight []= {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
-    uint8_t rightLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd3, 0xf9};
-    //uint16_t power = GetPower(leftLight);
-    //Serial.println("GetPower: " + String(power));
-    if (light_state) {
-      SetPower(rightLight, 0);
-      SetPower(leftLight, 0);
-      light_state = 0;
-    } else {
-      SetPower(rightLight, 65535);
-      SetPower(leftLight, 65535);
-      light_state = 1;
-    }
+  if (!reading) {
+    toggle_now = 1;
   }
-  interrupts();
 }
 
 void loop() {
+  if(toggle_now){
+    toggle_now = 0;
+    lxToggle();
+  }
 }
