@@ -7,7 +7,7 @@ const char *password = "mayahers";
 
 const int BUTTON = 0;
 
-boolean light_state = 0;
+boolean toggle_now = 0;
 
 const uint8_t SIZE_OF_MAC = 6;
 
@@ -174,15 +174,15 @@ void SetPower(uint8_t *target_addr, uint16_t level) {
 
 uint16_t GetPower(uint8_t *dest) {
   uint16_t power = 1;
-  
+
   lx_protocol_header_t header;
-  
+
   // Initialise both structures
   memset(&header, 0, sizeof(header));
-  
+
   // Set the target the nice way
   memcpy(header.target, dest, sizeof(uint8_t) * SIZE_OF_MAC);
-  
+
   // Setup the header
   header.size = sizeof(lx_protocol_header_t); // Size of header + payload
   header.tagged = 0;
@@ -193,19 +193,21 @@ uint16_t GetPower(uint8_t *dest) {
   header.res_required = 0;
   header.sequence = 100;
   header.type = LIFX_DEVICE_GETPOWER;
-  
+
+  interrupts();
+
   // Send a packet on startup
   UDP.beginPacket(bcastAddr, lxPort);
   UDP.write((char *) &header, sizeof(lx_protocol_header_t));
   UDP.endPacket();
-  
+
   unsigned long started = millis();
   while (millis() - started < timeoutInterval) {
     int packetLen = UDP.parsePacket();
     byte packetBuffer[LIFX_INCOMING_PACKET_BUFFER_LEN];
     if (packetLen && packetLen < LIFX_INCOMING_PACKET_BUFFER_LEN) {
       UDP.read(packetBuffer, sizeof(packetBuffer));
-      
+
       if (((lx_protocol_header_t *)packetBuffer)->type == LIFX_DEVICE_STATEPOWER) {
         power = ((lx_state_power_t *)(packetBuffer + sizeof(lx_protocol_header_t)))->level;
         return power;
@@ -257,22 +259,19 @@ void setup() {
 
 // Gets called by the interrupt.
 void onChange() {
-  //noInterrupts();
   // Get the pin reading.
   boolean reading = digitalRead(BUTTON);
 
   // Ignore dupe readings.
   if (reading == state) {
-    //interrupts();
     return;
   }
 
   // Check to see if the change is within a debounce delay threshold.
   if ((millis() - lastDebounceTime) <= debounceDelay) {
-    //interrupts();
     return;
   }
- 
+
   // This update to the last debounce check is necessary regardless of debounce state.
   //Serial.println("time: " + String(millis() - lastDebounceTime));
   lastDebounceTime = millis();
@@ -285,33 +284,29 @@ void onChange() {
 
   //detachInterrupt(BUTTON);
   if (reading) {
-    uint8_t leftLight []= {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
-    uint8_t rightLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd3, 0xf9};
-    uint16_t power = GetPower(leftLight);
-    power = GetPower(leftLight);
-    Serial.println("GetPower: " + String(power));
-    if (light_state) {
-      SetPower(rightLight, 0);
-      SetPower(leftLight, 0);
-      light_state = 0;
-    } else {
-      SetPower(rightLight, 65535);
-      SetPower(leftLight, 65535);
-      light_state = 1;
-    }
+    toggle_now = 1;
   }
-  //interrupts();
 }
 
+void toggle() {
+  uint8_t leftLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
+  uint8_t rightLight [] = {0xd0, 0x73, 0xd5, 0x24, 0xd3, 0xf9};
+  uint16_t power = GetPower(leftLight);
+  power = GetPower(leftLight);
+  Serial.println("GetPower: " + String(power));
+  if (power) {
+    SetPower(rightLight, 0);
+    SetPower(leftLight, 0);
+  } else {
+    SetPower(rightLight, 65535);
+    SetPower(leftLight, 65535);
+  }
+}
+
+
 void loop() {
-//  uint8_t dest[] = {0xd0, 0x73, 0xd5, 0x24, 0xd4, 0x27};
-//  unsigned long currentTime = millis();
-//  uint16_t power;
-//  // If 30 seconds have passed, send another packet
-//  if (currentTime - lastSend >= sendInterval) {
-//    lastSend = currentTime;
-//    power = GetPower(dest);
-//    Serial.print("Power level: ");
-//    Serial.println(power);
-//  }
+  if(toggle_now){
+    toggle();
+    toggle_now = 0;
+  }
 }
