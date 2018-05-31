@@ -5,7 +5,7 @@
 const char *ssid = "TAGAR";
 const char *password = "mayahers";
 
-const int BUTTON = 13;
+const int BUTTON = 0;
 
 boolean toggle_now = 0;
 
@@ -85,7 +85,7 @@ typedef struct {
 
 // Payload types
 #define LIFX_DEVICE_GETPOWER 20
-#define LIFX_DEVICE_SETPOWER 21
+#define LIFX_DEVICE_SETPOWER 117
 #define LIFX_DEVICE_STATEPOWER 22
 #define LIFX_DEVICE_SETCOLOR 102
 
@@ -122,7 +122,7 @@ void SetPower(uint8_t *dest, uint16_t level) {
 
   // Setup the payload
   payload.level = level;
-  payload.duration = 1000;
+  payload.duration = 3000;
 
   // Send a packet on startup
   UDP.beginPacket(bcastAddr, lxPort);
