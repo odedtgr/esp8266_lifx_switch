@@ -5,7 +5,7 @@
 const char *ssid = "TAGAR";
 const char *password = "mayahers";
 
-const int BUTTON = 0;
+const int BUTTON = 13;
 
 boolean toggle_now = 0;
 
@@ -122,7 +122,7 @@ void SetPower(uint8_t *dest, uint16_t level) {
 
   // Setup the payload
   payload.level = level;
-  payload.duration = 3000;
+  payload.duration = 2000;
 
   // Send a packet on startup
   UDP.beginPacket(bcastAddr, lxPort);
