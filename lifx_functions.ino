@@ -2,6 +2,8 @@ const uint8_t SIZE_OF_MAC = 6;
 // Port for talking to LIFX devices
 int lxPort = 56700;
 
+IPAddress bcastAddr(192, 168, 1, 255);
+
 // Timing data
 unsigned long timeoutInterval = 500;
 
